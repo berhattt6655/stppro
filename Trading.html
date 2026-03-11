@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>SitedeptFXPro Mobile Trading Calendar</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body {
+  margin:0;
+  font-family:'IBM Plex Sans Arabic',sans-serif;
+  background:#f4f6fb;
+  color:#111;
+}
+header {
+  background:#d4af37;
+  color:white;
+  font-size:26px;
+  font-weight:700;
+  text-align:center;
+  padding:18px 0;
+  box-shadow:0 2px 6px rgba(0,0,0,0.15);
+}
+.container {
+  max-width:414px; /* iPhone XR width */
+  margin:auto;
+  padding:15px;
+}
+.calendar-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:12px;
+}
+.calendar-header button {
+  padding:10px 14px;
+  border:none;
+  background:#d4af37;
+  color:white;
+  border-radius:8px;
+  font-weight:600;
+  font-size:16px;
+  cursor:pointer;
+}
+#month {
+  font-size:18px;
+  font-weight:600;
+  text-align:center;
+  flex:1;
+}
+.calendar {
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:5px;
+  margin-bottom:15px;
+  overflow-x:auto;
+}
+.day {
+  background:white;
+  padding:12px;
+  border-radius:10px;
+  text-align:center;
+  min-height:60px;
+  position:relative;
+  box-shadow:0 2px 6px rgba(0,0,0,0.12);
+  cursor:pointer;
+  transition:transform .15s;
+}
+.day:hover { transform:scale(1.05); }
+.day-number { font-weight:600; }
+.badge {
+  position:absolute;
+  bottom:4px;
+  right:4px;
+  padding:3px 5px;
+  font-size:12px;
+  color:white;
+  border-radius:4px;
+}
+.win { background:#16a34a; }
+.loss { background:#dc2626; }
+.trade-panel {
+  background:white;
+  padding:15px;
+  border-radius:10px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.12);
+  margin-bottom:15px;
+}
+.trade-panel input, .trade-panel textarea {
+  width:100%;
+  margin-top:8px;
+  padding:12px;
+  border-radius:8px;
+  border:1px solid #ddd;
+  font-size:16px;
+}
+.trade-buttons {
+  display:flex;
+  gap:10px;
+  margin-top:12px;
+}
+.trade-buttons button {
+  flex:1;
+  padding:14px;
+  border:none;
+  border-radius:8px;
+  font-weight:600;
+  font-size:16px;
+  cursor:pointer;
+}
+.profit-btn { background:#16a34a; color:white; }
+.loss-btn { background:#dc2626; color:white; }
+.stats {
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:15px;
+}
+.stat {
+  flex:1;
+  background:white;
+  padding:12px;
+  border-radius:10px;
+  text-align:center;
+  margin:0 4px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.12);
+}
+.stat h3 { margin:0; color:#d4af37; font-size:18px; }
+.chart-box {
+  background:white;
+  padding:15px;
+  border-radius:10px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.12);
+}
+@media(max-width:414px){
+  .calendar {grid-template-columns:repeat(4,1fr);}
+  .stats {flex-direction:column;gap:10px;}
+}
+</style>
+</head>
+<body>
+
+<header>SitedeptFXPro</header>
+<div class="container">
+
+<div class="calendar-header">
+<button onclick="changeMonth(-1)">◀</button>
+<h2 id="month">Month</h2>
+<button onclick="changeMonth(1)">▶</button>
+</div>
+
+<div class="calendar" id="calendar"></div>
+
+<div class="trade-panel">
+<h3 id="selectedDay">Select a day</h3>
+<input id="amount" type="number" placeholder="Amount (example 50)">
+<textarea id="note" placeholder="Trade note"></textarea>
+<div class="trade-buttons">
+<button class="profit-btn" onclick="addProfit()">+ Profit</button>
+<button class="loss-btn" onclick="addLoss()">- Loss</button>
+</div>
+</div>
+
+<div class="stats">
+<div class="stat"><h3 id="totalProfit">0</h3>Total Profit</div>
+<div class="stat"><h3 id="wins">0</h3>Wins</div>
+<div class="stat"><h3 id="losses">0</h3>Losses</div>
+</div>
+
+<div class="chart-box"><canvas id="chart"></canvas></div>
+
+</div>
+
+<script>
+let today=new Date(), month=today.getMonth(), year=today.getFullYear(), selectedDay=null;
+const calendar=document.getElementById("calendar");
+const selectedDayText=document.getElementById("selectedDay");
+const amount=document.getElementById("amount");
+const note=document.getElementById("note");
+const totalProfit=document.getElementById("totalProfit");
+const wins=document.getElementById("wins");
+const losses=document.getElementById("losses");
+
+function renderCalendar(){
+    calendar.innerHTML="";
+    let firstDay=new Date(year,month,1).getDay();
+    let days=new Date(year,month+1,0).getDate();
+    document.getElementById("month").innerText=new Date(year,month).toLocaleString("default",{month:"long"})+" "+year;
+    for(let i=0;i<firstDay;i++){calendar.appendChild(document.createElement("div"));}
+    for(let d=1;d<=days;d++){
+        let div=document.createElement("div"); div.className="day";
+        let num=document.createElement("div"); num.className="day-number"; num.innerText=d; div.appendChild(num);
+        let key="trade-"+year+"-"+month+"-"+d;
+        let saved=localStorage.getItem(key);
+        if(saved){
+            let data=JSON.parse(saved);
+            let badge=document.createElement("div");
+            badge.className="badge";
+            badge.innerText=(data.profit>0?"+":"")+data.profit;
+            badge.classList.add(data.profit>=0?"win":"loss");
+            div.appendChild(badge);
+        }
+        div.onclick=()=>{
+            selectedDay=d;
+            selectedDayText.innerText="Day "+d;
+            if(saved){let data=JSON.parse(saved); amount.value=Math.abs(data.profit); note.value=data.note;}
+            else {amount.value=""; note.value="";}
+        }
+        calendar.appendChild(div);
+    }
+    updateStats(); updateChart();
+}
+renderCalendar();
+
+function changeMonth(step){month+=step;if(month<0){month=11;year--;}if(month>11){month=0;year++;}renderCalendar();}
+function addProfit(){saveTrade(Math.abs(amount.value));}
+function addLoss(){saveTrade(-Math.abs(amount.value));}
+function saveTrade(value){
+    if(selectedDay==null){alert("Select day first"); return;}
+    let key="trade-"+year+"-"+month+"-"+selectedDay;
+    let data={profit:parseFloat(value),note:note.value};
+    localStorage.setItem(key,JSON.stringify(data));
+    renderCalendar();
+}
+function updateStats(){
+    let total=0,winCount=0,lossCount=0;
+    for(let i=0;i<localStorage.length;i++){
+        let key=localStorage.key(i);
+        if(key.startsWith("trade")){
+            let data=JSON.parse(localStorage.getItem(key));
+            total+=data.profit;
+            if(data.profit>0) winCount++; if(data.profit<0) lossCount++;
+        }
+    }
+    totalProfit.innerText=total; wins.innerText=winCount; losses.innerText=lossCount;
+}
+let chart=new Chart(document.getElementById("chart"),{
+    type:"line",
+    data:{labels:[],datasets:[{label:"Profit",data:[],borderColor:"#d4af37",backgroundColor:"rgba(212,175,55,0.2)",tension:0.3}]}
+});
+function updateChart(){
+    let profits=[];
+    for(let i=0;i<localStorage.length;i++){
+        let key=localStorage.key(i);
+        if(key.startsWith("trade")){let data=JSON.parse(localStorage.getItem(key));profits.push(data.profit);}
+    }
+    chart.data.labels=profits.map((_,i)=>"Trade "+(i+1));
+    chart.data.datasets[0].data=profits;
+    chart.update();
+}
+</script>
+</body>
+</html>
